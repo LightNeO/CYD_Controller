@@ -1,0 +1,150 @@
+/**
+ * MP3 player for the Sunton ESP32-2432S022C: reads .mp3 files from the microSD
+ * card and streams the decoded audio over Bluetooth A2DP to a paired speaker,
+ * with a touch UI showing the current track and prev/play-pause/next buttons.
+ *
+ * Audio path based on pschatzmann/arduino-audio-tools example player-sdfat-a2dp.
+ * Display/touch based on the already-verified esp32-smartdisplay/LVGL stack.
+ */
+
+#include <Arduino.h>
+#include <SPI.h>
+#include <esp32_smartdisplay.h>
+
+#define HELIX_LOGGING_ACTIVE false
+#include "AudioTools.h"
+#include "AudioTools/Communication/A2DPStream.h"
+#include "AudioTools/Disk/AudioSourceSDFAT.h"
+#include "AudioTools/AudioCodecs/CodecMP3Helix.h"
+
+// SD card pins (Sunton ESP32-2432S022C TF card slot)
+#define SD_CS   5
+#define SD_SCK  18
+#define SD_MOSI 23
+#define SD_MISO 19
+
+const char *startFilePath = "/";
+const char *ext = "mp3";
+AudioSourceSDFAT source(startFilePath, ext, SD_CS);
+A2DPStream out;
+MP3DecoderHelix decoder;
+AudioPlayer player(source, out, decoder);
+
+static lv_obj_t *title_label;
+static lv_obj_t *status_label;
+static lv_obj_t *playpause_label;
+static char last_track[128] = "";
+
+static void update_track_label()
+{
+    const char *name = source.toStr();
+    if (name == nullptr)
+        name = "(no file)";
+    if (strcmp(name, last_track) != 0)
+    {
+        strncpy(last_track, name, sizeof(last_track) - 1);
+        lv_label_set_text(title_label, name);
+    }
+}
+
+static void prev_cb(lv_event_t *e)
+{
+    player.previous();
+}
+
+static void next_cb(lv_event_t *e)
+{
+    player.next();
+}
+
+static void playpause_cb(lv_event_t *e)
+{
+    bool was_active = player.isActive();
+    player.setActive(!was_active);
+    lv_label_set_text(playpause_label, was_active ? "Play" : "Pause");
+}
+
+static void build_ui()
+{
+    lv_obj_t *scr = lv_scr_act();
+
+    title_label = lv_label_create(scr);
+    lv_label_set_long_mode(title_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_obj_set_width(title_label, 220);
+    lv_label_set_text(title_label, "Starting...");
+    lv_obj_align(title_label, LV_ALIGN_TOP_MID, 0, 20);
+
+    status_label = lv_label_create(scr);
+    lv_label_set_text(status_label, "Connecting to speaker...");
+    lv_obj_align(status_label, LV_ALIGN_TOP_MID, 0, 50);
+
+    lv_obj_t *prev_btn = lv_button_create(scr);
+    lv_obj_set_size(prev_btn, 60, 50);
+    lv_obj_align(prev_btn, LV_ALIGN_BOTTOM_MID, -80, -20);
+    lv_obj_add_event_cb(prev_btn, prev_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *prev_label = lv_label_create(prev_btn);
+    lv_label_set_text(prev_label, LV_SYMBOL_PREV);
+    lv_obj_center(prev_label);
+
+    lv_obj_t *pp_btn = lv_button_create(scr);
+    lv_obj_set_size(pp_btn, 70, 50);
+    lv_obj_align(pp_btn, LV_ALIGN_BOTTOM_MID, 0, -20);
+    lv_obj_add_event_cb(pp_btn, playpause_cb, LV_EVENT_CLICKED, NULL);
+    playpause_label = lv_label_create(pp_btn);
+    lv_label_set_text(playpause_label, "Pause");
+    lv_obj_center(playpause_label);
+
+    lv_obj_t *next_btn = lv_button_create(scr);
+    lv_obj_set_size(next_btn, 60, 50);
+    lv_obj_align(next_btn, LV_ALIGN_BOTTOM_MID, 80, -20);
+    lv_obj_add_event_cb(next_btn, next_cb, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *next_label = lv_label_create(next_btn);
+    lv_label_set_text(next_label, LV_SYMBOL_NEXT);
+    lv_obj_center(next_label);
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    AudioToolsLogger.begin(Serial, AudioToolsLogLevel::Warning);
+
+    smartdisplay_init();
+    build_ui();
+
+    SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+
+    player.setVolume(0.6);
+    player.begin();
+
+    // Output over Bluetooth A2DP to a speaker.
+    auto cfg = out.defaultConfig(TX_MODE);
+    cfg.silence_on_nodata = true; // don't disconnect during silence between tracks
+    // Leaving cfg.name unset connects to the first A2DP sink found while scanning -
+    // put the speaker into pairing mode before power-on. Once you know its exact
+    // Bluetooth name (watch the Serial log for discovered devices), set it here,
+    // e.g. cfg.name = "My Speaker";  for a reliable reconnect in a crowded room.
+    out.begin(cfg);
+
+    lv_label_set_text(status_label, "Connected");
+}
+
+static uint32_t lv_last_tick = 0;
+static uint32_t last_ui_update = 0;
+
+void loop()
+{
+    player.copy();
+
+    uint32_t now = millis();
+    if (now - lv_last_tick >= 5)
+    {
+        lv_tick_inc(now - lv_last_tick);
+        lv_last_tick = now;
+        lv_timer_handler();
+    }
+    if (now - last_ui_update >= 500)
+    {
+        last_ui_update = now;
+        update_track_label();
+    }
+}
