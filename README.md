@@ -18,7 +18,13 @@ The controller sends HTTP commands to the radio. It does not receive or decode t
   - Previous station
   - Play/Pause
   - Next station
+  - Volume −
   - OFF/ON software sleep toggle
+  - Volume +
+- The controls are arranged as two rows of three square buttons:
+  - `Previous | Play/Pause | Next`
+  - `Volume − | OFF/ON | Volume +`
+- The equalizer uses quick independent pseudo-random bar jumps while the radio is playing and drops to the minimum when stopped, sleeping, or offline.
 - Radio station list is deliberately not duplicated in the controller. Previous/Next use the radio API and the radio remains the source of truth.
 - Wi-Fi setup through WiFiManager.
 - Saved Wi-Fi credentials persist in ESP32 flash.
@@ -102,12 +108,16 @@ The controller's address is shown in the serial monitor. In the reference setup 
 
 The controller calls these endpoints on `http://192.168.50.52`:
 
+The radio's current volume range is `0..21`. The `Volume −` and `Volume +` buttons call the one-step volume endpoints; the actual volume state remains stored and managed by the radio.
+
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/status` | Read station, playing and sleeping state |
 | `GET /api/prev` | Previous station |
 | `GET /api/next` | Next station |
 | `GET /api/toggle` | Toggle play/stop |
+| `GET /api/vdown` | Decrease volume by one step |
+| `GET /api/vup` | Increase volume by one step |
 | `GET /api/sleep` | Stop audio/display and keep Wi-Fi alive |
 | `GET /api/wake` | Wake the radio |
 
