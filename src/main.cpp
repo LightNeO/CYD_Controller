@@ -198,9 +198,11 @@ static void build_radio_screen() {
     lv_obj_t *prev = make_button(row1, LV_SYMBOL_PREV, button_size, button_size, radio_prev_cb); lv_obj_align(prev, LV_ALIGN_LEFT_MID, 0, 0);
     lv_obj_t *play = make_button(row1, LV_SYMBOL_PLAY, button_size, button_size, radio_toggle_cb); lv_obj_align(play, LV_ALIGN_LEFT_MID, button_size + button_gap, 0); radio_play_icon = lv_obj_get_child(play, 0);
     lv_obj_t *next = make_button(row1, LV_SYMBOL_NEXT, button_size, button_size, radio_next_cb); lv_obj_align(next, LV_ALIGN_RIGHT_MID, 0, 0);
-    constexpr lv_coord_t power_height = 57;
-    lv_obj_t *power = make_button(radio_screen, "OFF", controls_width, power_height, radio_power_cb); lv_obj_align(power, LV_ALIGN_TOP_MID, 0, 246); radio_sleep_icon = lv_obj_get_child(power, 0);
+    lv_obj_t *row2 = lv_obj_create(radio_screen); lv_obj_remove_style_all(row2); lv_obj_set_size(row2, controls_width, button_size); lv_obj_align(row2, LV_ALIGN_TOP_MID, 0, 246);
+    lv_obj_t *volume_down = make_button(row2, "-", button_size, button_size, radio_volume_down_cb); lv_obj_align(volume_down, LV_ALIGN_LEFT_MID, 0, 0);
+    lv_obj_t *power = make_button(row2, "OFF", button_size, button_size, radio_power_cb); lv_obj_align(power, LV_ALIGN_LEFT_MID, button_size + button_gap, 0); radio_sleep_icon = lv_obj_get_child(power, 0);
     lv_label_set_text(radio_sleep_icon, "OFF");
+    lv_obj_t *volume_up = make_button(row2, "+", button_size, button_size, radio_volume_up_cb); lv_obj_align(volume_up, LV_ALIGN_RIGHT_MID, 0, 0);
     equalizer_timer = lv_timer_create(animate_equalizer, 144, nullptr);
 }
 
